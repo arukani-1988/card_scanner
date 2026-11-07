@@ -1,0 +1,28 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - run: ./gradlew assembleRelease --no-daemon
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: card-scanner-apk
+          path: android/app/build/outputs/apk/release/*.apk
