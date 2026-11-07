@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Card Scanner",
+    "slug": "card-scanner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.cardscanner",
+      "deploymentTarget": "16.0"
+    },
+    "android": {
+      "package": "com.example.cardscanner",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Card Scanner uses the camera to photograph business cards.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Card Scanner saves the details from scanned cards to your contacts."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Card Scanner reads card photos you choose from your gallery.",
+          "cameraPermission": "Card Scanner uses the camera to photograph business cards.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-dev-client"
+    ]
+  }
+}
