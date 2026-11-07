@@ -10,13 +10,17 @@ Photograph a business card (or pick a photo), check the details it found, and sa
 
 | Screen | What it does |
 | --- | --- |
-| Scan | Camera with a card frame, shutter, gallery import, flash |
-| Review details | All fields editable; add or remove numbers and emails; tap the label chip to change Mobile/Work/Home/Fax |
+| Scan | Camera with a card frame. Takes the photo by itself when a card is held steady (or press the shutter). Gallery import and flash |
+| Review details | All fields editable; add or remove numbers and emails; tap the label chip to change Mobile/Work/Home/Fax; "Show scanned text" shows exactly what was read |
 | Saved | Confirmation and summary |
 | Saved cards | Search your scanned cards |
-| Settings | Skip-review option, default country code (91 = India) |
+| Settings | Auto-capture, new-photo detection (Android), skip-review, default country code |
 
-Not built yet: automatic detection after a photo from the phone's own camera, and the Share-menu entry. See "Next phase" below.
+Also:
+- **Duplicate check:** before saving, the app looks for a contact with the same phone number or email and offers Cancel, Save as new, or Add to existing (adds only the missing details).
+- **Android notification:** with "Detect cards in new photos" on, a photo taken with the normal camera that looks like a business card produces a "Business card detected" notification with Save contact and Review and edit buttons.
+- **Android Share menu:** open a photo in the gallery, tap Share, choose Card Scanner.
+- The address is split into street, city, state and pin code when saved to the contact.
 
 ## Run it
 
@@ -66,10 +70,14 @@ npm run typecheck
 
 The card-reading logic is in `src/parseCard.ts` and is covered by tests in `src/__tests__/`. Add a real card's text there whenever a card is parsed wrongly.
 
+## Notes on the Android extras
+
+- The notification needs "Allow all photos" access and notification permission (the app asks when you switch the setting on). The phone may delay the check a little to save battery.
+- Only photos in the camera folder (DCIM) are checked, not screenshots or downloads. Use the Share menu for those.
+- The notification's Save contact button opens the app briefly to save the card, then shows the Saved screen.
+- The code for these two features is in `modules/card-watcher` (Kotlin) and `plugins/withShareImage.js`.
+
 ## Next phase
 
-- **Android:** a notification after you take a photo with the normal camera ("Business card detected - Save contact"). Needs a small native Kotlin module that watches for new photos.
-- **Android and iPhone:** appear in the Share menu so any photo can be sent to Card Scanner.
-- **iPhone:** a lock-screen or Control Center shortcut that opens the scanner in one tap. Apple does not let apps watch the camera roll in the background, so the automatic notification is Android only.
-- Auto-capture when a card is steady in the frame, and cropping to the card edge.
-- Duplicate check against existing contacts.
+- iPhone: a lock-screen or Control Center shortcut that opens the scanner in one tap, and the Share-menu entry. Apple does not let apps watch the camera roll in the background, so the automatic notification is Android only.
+- Cropping to the card edge for better reading.

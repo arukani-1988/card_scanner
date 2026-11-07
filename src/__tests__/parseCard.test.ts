@@ -68,3 +68,40 @@ describe('splitName', () => {
     expect(splitName('Madonna')).toEqual({ givenName: 'Madonna', familyName: '' });
   });
 });
+
+describe('parseCard: emails, websites and addresses', () => {
+  it('repairs spaces the text reader adds inside emails', () => {
+    const card = parseCard(['Priya Mehta', 'E-mail : priya @ meridiantextiles . in', 'Web: WWW.Meridian.COM']);
+    expect(card.emails).toEqual(['priya@meridiantextiles.in']);
+    expect(card.website.toLowerCase()).toBe('www.meridian.com');
+  });
+
+  it('keeps a co.in email and finds a bare-domain website', () => {
+    const card = parseCard(['Anita Desai', 'anita@desaipack.co.in', 'desaipack.co.in']);
+    expect(card.emails).toEqual(['anita@desaipack.co.in']);
+    expect(card.website).toBe('desaipack.co.in');
+  });
+
+  it('finds an address that has no keywords by using the pin code', () => {
+    const card = parseCard(['Rahul Shah', 'Partner', 'Shah & Co. Chartered Accountants', 'B-12, Ambawadi', 'Ahmedabad 380015', '+91 98250 12345']);
+    expect(card.address).toBe('B-12, Ambawadi, Ahmedabad 380015');
+    expect(card.name).toBe('Rahul Shah');
+    expect(card.company).toBe('Shah & Co. Chartered Accountants');
+  });
+
+  it('reads an address that follows an "Address:" label on its own line', () => {
+    const card = parseCard(['Neha Joshi', 'Joshi Interiors', 'Address:', '12 Station Road', 'Anand']);
+    expect(card.address).toBe('12 Station Road, Anand');
+  });
+
+  it('does not mistake a company name containing a city for an address', () => {
+    const card = parseCard(['Ahmedabad Textiles Pvt Ltd', 'Priya Mehta', 'Manager', '204 Trade Centre, Ahmedabad 380054']);
+    expect(card.company).toBe('Ahmedabad Textiles Pvt Ltd');
+    expect(card.address).toBe('204 Trade Centre, Ahmedabad 380054');
+  });
+
+  it('keeps the raw text for the review screen', () => {
+    const card = parseCard(['  Priya   Mehta ', '', 'Manager']);
+    expect(card.raw).toEqual(['Priya Mehta', 'Manager']);
+  });
+});

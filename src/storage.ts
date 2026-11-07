@@ -16,9 +16,11 @@ export interface SavedCard {
 export interface Settings {
   skipReview: boolean;
   countryCode: string; // digits only, e.g. "91"
+  autoCapture: boolean; // take the photo by itself when a card is steady in the frame
+  photoDetection: boolean; // Android: notify when a new camera photo looks like a card
 }
 
-export const DEFAULT_SETTINGS: Settings = { skipReview: false, countryCode: '91' };
+export const DEFAULT_SETTINGS: Settings = { skipReview: false, countryCode: '91', autoCapture: true, photoDetection: false };
 
 const CARDS_KEY = 'cards.v1';
 const SETTINGS_KEY = 'settings.v1';

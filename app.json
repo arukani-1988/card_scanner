@@ -22,6 +22,7 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      "./plugins/withShareImage",
       [
         "expo-camera",
         {
@@ -44,6 +45,7 @@
         }
       ],
       "expo-dev-client"
-    ]
+    ],
+    "scheme": "cardscanner"
   }
 }

@@ -1,27 +1,53 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors } from '../theme';
-import { readCard } from '../ocr';
-import { loadSettings, addCard } from '../storage';
-import { saveToContacts } from '../saveContact';
+import { readCard, readLines } from '../ocr';
+import { SteadyTracker } from '../autoCapture';
+import { loadSettings } from '../storage';
+import { saveCard } from '../saveContact';
+import { savedParams } from '../incoming';
 import type { RootStackParamList } from '../types';
 import { PrimaryButton } from '../components/Ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Scan'>;
+
+const AUTO_CHECK_MS = 1200;
 
 export default function ScanScreen({ navigation }: Props) {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
+  const [autoOn, setAutoOn] = useState(true);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cardInView, setCardInView] = useState(false);
+  const focused = useIsFocused();
+
+  const busyRef = useRef(false);
+  const checkingRef = useRef(false);
+  const tracker = useRef(new SteadyTracker()).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSettings().then((s) => setAutoOn(s.autoCapture));
+      tracker.reset();
+      setCardInView(false);
+    }, [tracker]),
+  );
+
+  function setBusyState(value: boolean) {
+    busyRef.current = value;
+    setBusy(value);
+  }
 
   async function process(uri: string) {
-    setBusy(true);
+    setBusyState(true);
     try {
       const settings = await loadSettings();
       const card = await readCard(uri, settings.countryCode);
@@ -30,42 +56,75 @@ export default function ScanScreen({ navigation }: Props) {
         return;
       }
       if (settings.skipReview && (card.name || card.phones.length)) {
-        const ok = await saveToContacts(card);
-        if (!ok) {
+        const outcome = await saveCard(card);
+        if (outcome === 'denied') {
           Alert.alert('Contacts permission needed', 'Allow access to contacts in your phone settings so cards can be saved.');
-          return;
+        } else if (outcome !== 'cancelled') {
+          navigation.navigate('Saved', savedParams(card));
         }
-        await addCard({ ...card, id: String(Date.now()), savedAt: Date.now() });
-        navigation.navigate('Saved', {
-          name: card.name,
-          title: card.title,
-          company: card.company,
-          phones: card.phones.length,
-          emails: card.emails.length,
-          website: card.website ? 1 : 0,
-          address: card.address ? 1 : 0,
-        });
         return;
       }
       navigation.navigate('Review', { card });
     } catch {
       Alert.alert('Something went wrong', 'The card could not be read. Please try again.');
     } finally {
-      setBusy(false);
+      setBusyState(false);
     }
   }
 
   async function capture() {
-    if (busy || !cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
-    await process(photo.uri);
+    if (busyRef.current || !cameraRef.current) return;
+    setBusyState(true); // block the auto-capture loop while the photo is taken
+    let uri: string | null = null;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      uri = photo.uri;
+    } catch {
+      Alert.alert('Could not take the photo', 'Please try again.');
+    } finally {
+      setBusyState(false);
+    }
+    if (uri) await process(uri);
   }
 
   async function pickFromGallery() {
-    if (busy) return;
+    if (busyRef.current) return;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (!result.canceled && result.assets[0]) await process(result.assets[0].uri);
   }
+
+  // Auto-capture: look at the live camera about once a second and take the photo when a card has stayed steady.
+  useEffect(() => {
+    if (!autoOn || !focused || !permission?.granted || !cameraReady) return;
+    let cancelled = false;
+
+    const check = async () => {
+      if (cancelled || busyRef.current || checkingRef.current || !cameraRef.current) return;
+      checkingRef.current = true;
+      try {
+        const frame = await cameraRef.current.takePictureAsync({ quality: 0.3, skipProcessing: true, shutterSound: false });
+        const lines = await readLines(frame.uri);
+        if (cancelled || busyRef.current) return;
+        const verdict = tracker.push(lines);
+        setCardInView(verdict !== 'none');
+        if (verdict === 'steady') {
+          tracker.reset();
+          await capture();
+        }
+      } catch {
+        // a missed frame is fine; the next check tries again
+      } finally {
+        checkingRef.current = false;
+      }
+    };
+
+    const timer = setInterval(check, AUTO_CHECK_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOn, focused, permission?.granted, cameraReady]);
 
   if (!permission) return <View style={styles.root} />;
 
@@ -84,6 +143,9 @@ export default function ScanScreen({ navigation }: Props) {
     );
   }
 
+  const headline = autoOn && cardInView ? 'Card detected' : autoOn ? 'Looking for a card…' : 'Place the card inside the frame';
+  const subline = autoOn && cardInView ? 'Hold steady, capturing automatically' : 'Good light and a flat surface help';
+
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
@@ -96,14 +158,14 @@ export default function ScanScreen({ navigation }: Props) {
 
       <View style={styles.viewfinderArea}>
         <View style={styles.viewfinder}>
-          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" flash={flash} />
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" flash={flash} onCameraReady={() => setCameraReady(true)} />
           <View style={[styles.corner, styles.tl]} />
           <View style={[styles.corner, styles.tr]} />
           <View style={[styles.corner, styles.bl]} />
           <View style={[styles.corner, styles.br]} />
         </View>
-        <Text style={styles.hint}>Place the card inside the frame</Text>
-        <Text style={styles.subHint}>Good light and a flat surface help</Text>
+        <Text style={styles.hint}>{headline}</Text>
+        <Text style={styles.subHint}>{subline}</Text>
       </View>
 
       <View style={styles.controls}>

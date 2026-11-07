@@ -5,8 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, radius } from '../theme';
 import { Field, PrimaryButton, TextLink } from '../components/Ui';
-import { saveToContacts } from '../saveContact';
-import { addCard } from '../storage';
+import { saveCard } from '../saveContact';
+import { savedParams } from '../incoming';
 import type { PhoneKind } from '../parseCard';
 import type { RootStackParamList } from '../types';
 
@@ -25,6 +25,7 @@ export default function ReviewScreen({ navigation, route }: Props) {
   const [website, setWebsite] = useState(initial.website);
   const [address, setAddress] = useState(initial.address);
   const [saving, setSaving] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
 
   const found =
     [initial.name, initial.title, initial.company, initial.website, initial.address].filter(Boolean).length + initial.phones.length + initial.emails.length;
@@ -53,21 +54,13 @@ export default function ReviewScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       const input = { name: name.trim(), title: title.trim(), company: company.trim(), phones: cleanPhones, emails: cleanEmails, website: website.trim(), address: address.trim() };
-      const ok = await saveToContacts(input);
-      if (!ok) {
+      const outcome = await saveCard(input);
+      if (outcome === 'denied') {
         Alert.alert('Contacts permission needed', 'Allow access to contacts in your phone settings so cards can be saved.');
         return;
       }
-      await addCard({ ...input, id: String(Date.now()), savedAt: Date.now() });
-      navigation.replace('Saved', {
-        name: input.name,
-        title: input.title,
-        company: input.company,
-        phones: cleanPhones.length,
-        emails: cleanEmails.length,
-        website: input.website ? 1 : 0,
-        address: input.address ? 1 : 0,
-      });
+      if (outcome === 'cancelled') return;
+      navigation.replace('Saved', savedParams(input));
     } catch {
       Alert.alert('Could not save', 'Something went wrong while saving the contact. Please try again.');
     } finally {
@@ -83,6 +76,15 @@ export default function ReviewScreen({ navigation, route }: Props) {
             <Text style={styles.bannerTitle}>Card scanned</Text>
             <Text style={styles.bannerBody}>{found} details found. Tap any field to edit.</Text>
           </View>
+
+          <Pressable accessibilityRole="button" onPress={() => setShowRaw((v) => !v)} style={styles.rawToggle}>
+            <Text style={styles.rawToggleText}>{showRaw ? 'Hide scanned text' : 'Show scanned text'}</Text>
+          </Pressable>
+          {showRaw && (
+            <View style={styles.rawBox}>
+              <Text selectable style={styles.rawText}>{initial.raw.join('\n') || 'No text was read.'}</Text>
+            </View>
+          )}
 
           <View style={styles.form}>
             <Field label="Full name" value={name} onChangeText={setName} autoCapitalize="words" />
@@ -174,6 +176,10 @@ const styles = StyleSheet.create({
   kindChip: { width: 84, height: 48, borderRadius: radius.input, borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   kindText: { fontSize: 15, color: colors.ink },
   remove: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' },
+  rawToggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  rawToggleText: { color: colors.accent, fontSize: 14, fontWeight: '500' },
+  rawBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.input, padding: 12 },
+  rawText: { fontSize: 13, lineHeight: 19, color: colors.muted },
   footer: { paddingTop: 24, gap: 12 },
   footnote: { textAlign: 'center', fontSize: 13, color: colors.muted },
 });
